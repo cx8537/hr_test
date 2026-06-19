@@ -25,6 +25,12 @@ public class Holiday extends BaseEntity {
 		this.name = name;
 	}
 
+	/** 공휴일 수정(AP-043). 날짜·명칭 변경 시 휴가 계산에 즉시 반영. */
+	public void update(LocalDate date, String name) {
+		this.date = date;
+		this.name = name;
+	}
+
 	public LocalDate getDate() {
 		return date;
 	}
