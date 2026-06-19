@@ -161,4 +161,93 @@ export function attachmentDownloadUrl(attachmentId: number): string {
   return `${API_BASE_URL}/api/approval/attachments/${attachmentId}`;
 }
 
+// --- 거점 API (LOC-001~006) ---
+export interface LocationResponse {
+  id: number;
+  locationCode: string;
+  name: string;
+  address: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  contact: string | null;
+  fax: string | null;
+  locationType: string | null;
+  managerId: number | null;
+  status: "ACTIVE" | "INACTIVE";
+}
+
+/** 활성 거점 목록(LOC-005). 지도/목록 뷰 공통 데이터셋. */
+export async function listLocations(): Promise<LocationResponse[]> {
+  return apiFetch<LocationResponse[]>("/api/locations");
+}
+
+/** 거점 등록(LOC-001, 시스템관리자). */
+export async function createLocation(payload: {
+  locationCode: string;
+  name: string;
+  address?: string;
+  locationType?: string;
+  managerId?: number;
+}): Promise<LocationResponse> {
+  return apiFetch<LocationResponse>("/api/locations", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+/** 좌표 수정(LOC-002, 지도 핀/수동 입력). */
+export async function updateLocationCoordinates(
+  id: number,
+  latitude: number,
+  longitude: number,
+): Promise<LocationResponse> {
+  return apiFetch<LocationResponse>(`/api/locations/${id}/coordinates`, {
+    method: "PUT",
+    body: JSON.stringify({ latitude, longitude }),
+  });
+}
+
+/** 담당자 지정(LOC-003). */
+export async function assignLocationManager(
+  id: number,
+  managerId: number,
+): Promise<LocationResponse> {
+  return apiFetch<LocationResponse>(`/api/locations/${id}/manager`, {
+    method: "PUT",
+    body: JSON.stringify({ managerId }),
+  });
+}
+
+export interface LocationPhotoResponse {
+  id: number;
+  locationId: number;
+  fileName: string;
+  contentType: string;
+  sizeBytes: number;
+}
+
+/** 거점 사진 업로드(LOC-004): multipart, 백엔드 경유. */
+export async function uploadLocationPhoto(
+  locationId: number,
+  file: File,
+): Promise<LocationPhotoResponse> {
+  const token = getAccessToken();
+  const form = new FormData();
+  form.append("file", file);
+  const res = await fetch(`${API_BASE_URL}/api/locations/${locationId}/photos`, {
+    method: "POST",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: form,
+  });
+  if (!res.ok) throw new ApiError(res.status, `사진 업로드 실패: ${res.status}`);
+  return (await res.json()) as LocationPhotoResponse;
+}
+
+/** 거점 사진 목록(LOC-004). */
+export async function listLocationPhotos(
+  locationId: number,
+): Promise<LocationPhotoResponse[]> {
+  return apiFetch<LocationPhotoResponse[]>(`/api/locations/${locationId}/photos`);
+}
+
 export { API_BASE_URL };
