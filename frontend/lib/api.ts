@@ -341,4 +341,56 @@ export async function getAssetQuantity(
   return apiFetch(`/api/assets/items/${itemId}/quantity`);
 }
 
+// --- 예약 API (RSV-001~005) ---
+export type ResourceType = "VEHICLE" | "MEETING_ROOM";
+
+export interface ResourceResponse {
+  id: number;
+  locationId: number;
+  type: ResourceType;
+  name: string;
+  status: "ACTIVE" | "INACTIVE";
+}
+
+export interface ReservationResponse {
+  id: number;
+  resourceId: number;
+  reserverId: number;
+  startAt: string;
+  endAt: string;
+  purpose: string | null;
+  headcount: number;
+  destination: string | null;
+  driver: string | null;
+  status: "ACTIVE" | "CANCELLED";
+}
+
+/** 즉시 예약(RSV-002). */
+export async function createReservation(payload: {
+  resourceId: number;
+  startAt: string;
+  endAt: string;
+  purpose?: string;
+  headcount?: number;
+  note?: string;
+  destination?: string;
+  driver?: string;
+}): Promise<ReservationResponse> {
+  return apiFetch<ReservationResponse>("/api/reservations", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+/** 예약 취소(RSV-005). 타인 취소 시 사유 필요. */
+export async function cancelReservation(
+  id: number,
+  reason?: string,
+): Promise<ReservationResponse> {
+  return apiFetch<ReservationResponse>(`/api/reservations/${id}/cancel`, {
+    method: "POST",
+    body: JSON.stringify({ reason }),
+  });
+}
+
 export { API_BASE_URL };

@@ -40,6 +40,14 @@ public class ReservationService {
 		return reservationRepository.save(reservation);
 	}
 
+	/** 예약자 ID(취소 권한 판정용 — 본인 여부 확인). */
+	@Transactional(readOnly = true)
+	public Long reserverIdOf(Long reservationId) {
+		return reservationRepository.findById(reservationId)
+			.orElseThrow(() -> new IllegalArgumentException("예약을 찾을 수 없습니다."))
+			.getReserverId();
+	}
+
 	/**
 	 * 취소(RSV-005). 본인은 자유 취소(AC1), 본인이 아니면 관리자 취소로 보고 사유 필수(AC2).
 	 * 관리자 권한 자체는 컨트롤러 RBAC가, 알림(AC3)은 NOTI 모듈(Phase 9)이 처리한다.
