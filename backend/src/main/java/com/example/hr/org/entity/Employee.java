@@ -74,6 +74,19 @@ public class Employee extends BaseEntity {
 		this.tokenVersion++;
 	}
 
+	/** 비활성화(소프트 삭제, FND-001 AC3/AC4). 기존 토큰도 즉시 무효화. */
+	public void deactivate() {
+		this.status = EntityStatus.INACTIVE;
+		incrementTokenVersion();
+	}
+
+	/** 관리자 비밀번호 리셋(FND 주석): 임시 비밀번호 발급 + 최초 로그인 변경 강제 + 기존 세션 무효화. */
+	public void resetPassword(String newPasswordHash) {
+		this.passwordHash = newPasswordHash;
+		this.mustChangePassword = true;
+		incrementTokenVersion();
+	}
+
 	public String getEmpNo() {
 		return empNo;
 	}

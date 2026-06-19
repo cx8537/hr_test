@@ -29,6 +29,16 @@ public class GlobalExceptionHandler {
 		return body(HttpStatus.BAD_REQUEST, "BAD_REQUEST", "요청 값이 올바르지 않습니다.");
 	}
 
+	@ExceptionHandler(IllegalArgumentException.class)
+	public ResponseEntity<Map<String, String>> handleIllegalArgument(IllegalArgumentException e) {
+		return body(HttpStatus.BAD_REQUEST, "BAD_REQUEST", e.getMessage());
+	}
+
+	@ExceptionHandler(IllegalStateException.class)
+	public ResponseEntity<Map<String, String>> handleConflict(IllegalStateException e) {
+		return body(HttpStatus.CONFLICT, "CONFLICT", e.getMessage());
+	}
+
 	private ResponseEntity<Map<String, String>> body(HttpStatus status, String error, String message) {
 		return ResponseEntity.status(status)
 			.body(Map.of("error", error, "message", message == null ? "" : message));

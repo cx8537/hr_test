@@ -43,6 +43,11 @@ public class Department extends BaseEntity {
 		this.status = status;
 	}
 
+	/** 비활성화(물리 삭제 금지, 소프트 삭제 — FND-002 AC2). */
+	public void deactivate() {
+		this.status = EntityStatus.INACTIVE;
+	}
+
 	public String getDeptCode() {
 		return deptCode;
 	}
