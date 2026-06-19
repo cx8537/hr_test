@@ -393,4 +393,31 @@ export async function cancelReservation(
   });
 }
 
+// --- 문서 아카이브 API (DOC-004/006/007) ---
+export type DocumentVisibility = "PUBLIC" | "INVOLVED_ONLY";
+export type DocumentSource = "APPROVAL" | "UPLOAD";
+
+export interface ArchiveDocumentResponse {
+  id: number;
+  title: string;
+  fileName: string | null;
+  source: DocumentSource;
+  visibility: DocumentVisibility;
+  folderId: number | null;
+}
+
+/** 제목·파일명 검색(DOC-004). 볼 수 없는 문서는 서버에서 제외된다. */
+export async function searchDocuments(
+  keyword: string,
+): Promise<ArchiveDocumentResponse[]> {
+  return apiFetch<ArchiveDocumentResponse[]>(
+    `/api/documents/search?keyword=${encodeURIComponent(keyword)}`,
+  );
+}
+
+/** 다운로드 URL(DOC-007): 백엔드 경유. presigned URL 미사용. */
+export function documentDownloadUrl(id: number): string {
+  return `${API_BASE_URL}/api/documents/${id}/download`;
+}
+
 export { API_BASE_URL };
