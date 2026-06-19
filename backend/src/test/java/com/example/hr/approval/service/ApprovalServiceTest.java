@@ -37,6 +37,7 @@ class ApprovalServiceTest {
 	private com.example.hr.approval.repository.DelegationRepository delegationRepository;
 	private com.example.hr.approval.repository.MandateRepository mandateRepository;
 	private SignatureValidationService signatureValidationService;
+	private com.example.hr.notification.service.NotificationService notificationService;
 	private ApprovalService service;
 
 	@BeforeEach
@@ -46,10 +47,13 @@ class ApprovalServiceTest {
 		delegationRepository = mock(com.example.hr.approval.repository.DelegationRepository.class);
 		mandateRepository = mock(com.example.hr.approval.repository.MandateRepository.class);
 		signatureValidationService = mock(SignatureValidationService.class);
+		notificationService = mock(com.example.hr.notification.service.NotificationService.class);
 		when(delegationRepository.findByActiveTrue()).thenReturn(java.util.List.of());
 		when(mandateRepository.findByActiveTrue()).thenReturn(java.util.List.of());
+		when(lineRepository.save(any(ApprovalLineSnapshot.class)))
+			.thenAnswer(inv -> inv.getArgument(0));
 		service = new ApprovalService(documentRepository, lineRepository, delegationRepository,
-			mandateRepository, signatureValidationService,
+			mandateRepository, signatureValidationService, notificationService,
 			Clock.fixed(Instant.parse("2026-06-19T00:00:00Z"), ZoneOffset.UTC));
 	}
 

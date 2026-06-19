@@ -1,5 +1,7 @@
 package com.example.hr.reservation.service;
 
+import com.example.hr.notification.domain.NotificationFactory;
+import com.example.hr.notification.service.NotificationService;
 import com.example.hr.reservation.domain.ReservationStatus;
 import com.example.hr.reservation.domain.ResourceType;
 import com.example.hr.reservation.entity.Reservation;
@@ -21,12 +23,15 @@ public class ResourceService {
 
 	private final ResourceRepository resourceRepository;
 	private final ReservationRepository reservationRepository;
+	private final NotificationService notificationService;
 	private final Clock clock;
 
 	public ResourceService(ResourceRepository resourceRepository,
-			ReservationRepository reservationRepository, Clock clock) {
+			ReservationRepository reservationRepository,
+			NotificationService notificationService, Clock clock) {
 		this.resourceRepository = resourceRepository;
 		this.reservationRepository = reservationRepository;
+		this.notificationService = notificationService;
 		this.clock = clock;
 	}
 
@@ -45,7 +50,9 @@ public class ResourceService {
 			.findByResourceIdAndStatusAndEndAtAfter(resourceId, ReservationStatus.ACTIVE,
 				OffsetDateTime.now(clock));
 		for (Reservation reservation : future) {
-			reservation.cancel(actorId, "자원 비활성화로 자동 취소"); // RSV-007 AC1 (알림은 Phase 9)
+			reservation.cancel(actorId, "자원 비활성화로 자동 취소"); // RSV-007 AC1
+			notificationService.create(NotificationFactory.reservationResourceRemoved(
+				reservation.getReserverId(), resource.getName())); // 예약자 알림(RSV-007 AC2/NOTI-002)
 		}
 		return future.size();
 	}

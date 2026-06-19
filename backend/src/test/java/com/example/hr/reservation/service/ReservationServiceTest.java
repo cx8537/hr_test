@@ -22,12 +22,17 @@ import org.junit.jupiter.api.Test;
 class ReservationServiceTest {
 
 	private ReservationRepository reservationRepository;
+	private com.example.hr.reservation.repository.ResourceRepository resourceRepository;
+	private com.example.hr.notification.service.NotificationService notificationService;
 	private ReservationService reservationService;
 
 	@BeforeEach
 	void setUp() {
 		reservationRepository = mock(ReservationRepository.class);
-		reservationService = new ReservationService(reservationRepository);
+		resourceRepository = mock(com.example.hr.reservation.repository.ResourceRepository.class);
+		notificationService = mock(com.example.hr.notification.service.NotificationService.class);
+		reservationService = new ReservationService(reservationRepository, resourceRepository,
+			notificationService);
 	}
 
 	private static OffsetDateTime t(int hour) {
@@ -107,11 +112,15 @@ class ReservationServiceTest {
 	void RSV005_관리자_취소_사유포함_허용() {
 		Reservation r = active(9, 10);
 		when(reservationRepository.findById(5L)).thenReturn(Optional.of(r));
+		when(resourceRepository.findById(1L)).thenReturn(Optional.of(
+			new com.example.hr.reservation.entity.Resource(5L,
+				com.example.hr.reservation.domain.ResourceType.MEETING_ROOM, "대회의실")));
 
 		reservationService.cancel(5L, 999L, "긴급 점검");
 
 		assertThat(r.getStatus()).isEqualTo(ReservationStatus.CANCELLED);
 		assertThat(r.getCancelReason()).isEqualTo("긴급 점검");
 		assertThat(r.getCancelledById()).isEqualTo(999L);
+		org.mockito.Mockito.verify(notificationService).create(any()); // 예약자 취소 알림(RSV-005 AC3)
 	}
 }

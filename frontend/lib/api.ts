@@ -420,4 +420,29 @@ export function documentDownloadUrl(id: number): string {
   return `${API_BASE_URL}/api/documents/${id}/download`;
 }
 
+// --- 알림 API (NOTI-003) ---
+export interface NotificationResponse {
+  id: number;
+  type: string;
+  message: string;
+  read: boolean;
+  createdAt: string;
+}
+
+/** 본인 알림 목록(최신순). */
+export async function listNotifications(): Promise<NotificationResponse[]> {
+  return apiFetch<NotificationResponse[]>("/api/notifications");
+}
+
+/** 안읽음 수(뱃지 폴링, NOTI-003 AC1). */
+export async function unreadNotificationCount(): Promise<number> {
+  const res = await apiFetch<{ unread: number }>("/api/notifications/unread-count");
+  return res.unread;
+}
+
+/** 읽음 처리(NOTI-003 AC2). */
+export async function markNotificationRead(id: number): Promise<void> {
+  return apiFetch<void>(`/api/notifications/${id}/read`, { method: "POST" });
+}
+
 export { API_BASE_URL };

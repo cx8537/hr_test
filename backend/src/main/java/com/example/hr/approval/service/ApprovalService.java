@@ -16,6 +16,8 @@ import com.example.hr.approval.repository.ApprovalDocumentRepository;
 import com.example.hr.approval.repository.ApprovalLineSnapshotRepository;
 import com.example.hr.approval.repository.DelegationRepository;
 import com.example.hr.approval.repository.MandateRepository;
+import com.example.hr.notification.domain.NotificationFactory;
+import com.example.hr.notification.service.NotificationService;
 import com.example.hr.signature.service.SignatureValidationService;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
@@ -43,18 +45,21 @@ public class ApprovalService {
 	private final DelegationRepository delegationRepository;
 	private final MandateRepository mandateRepository;
 	private final SignatureValidationService signatureValidationService;
+	private final NotificationService notificationService;
 	private final Clock clock;
 
 	public ApprovalService(ApprovalDocumentRepository documentRepository,
 			ApprovalLineSnapshotRepository lineRepository,
 			DelegationRepository delegationRepository,
 			MandateRepository mandateRepository,
-			SignatureValidationService signatureValidationService, Clock clock) {
+			SignatureValidationService signatureValidationService,
+			NotificationService notificationService, Clock clock) {
 		this.documentRepository = documentRepository;
 		this.lineRepository = lineRepository;
 		this.delegationRepository = delegationRepository;
 		this.mandateRepository = mandateRepository;
 		this.signatureValidationService = signatureValidationService;
+		this.notificationService = notificationService;
 		this.clock = clock;
 	}
 
@@ -68,11 +73,13 @@ public class ApprovalService {
 		ApprovalDocument document = new ApprovalDocument(formType, title, drafterId, draftDeptId);
 		document.changeStatus(DocumentStatus.IN_PROGRESS);
 		documentRepository.save(document);
+		List<ApprovalLineSnapshot> saved = new java.util.ArrayList<>();
 		for (LineMemberSpec spec : line) {
-			lineRepository.save(new ApprovalLineSnapshot(
+			saved.add(lineRepository.save(new ApprovalLineSnapshot(
 				document.getId(), document.getCurrentRound(), spec.stepNo(), spec.approverId(),
-				spec.stepType()));
+				spec.stepType())));
 		}
+		notifyActiveStep(saved, document.getTitle(), null); // 첫 단계 결재자에게 차례 알림(NOTI-002)
 		return document;
 	}
 
@@ -120,7 +127,18 @@ public class ApprovalService {
 			throw new IllegalArgumentException("서명 검증에 실패했습니다."); // FND-008
 		}
 		target.act(MemberState.APPROVED, OffsetDateTime.now(clock), actorId);
-		return reevaluate(document, line);
+		DocumentStatus status = reevaluate(document, line);
+		if (status == DocumentStatus.APPROVED) {
+			notificationService.create(
+				NotificationFactory.approved(document.getDrafterId(), document.getTitle()));
+		} else if (status == DocumentStatus.ON_HOLD) {
+			notificationService.create(
+				NotificationFactory.onHold(document.getDrafterId(), document.getTitle()));
+		} else if (status == DocumentStatus.IN_PROGRESS) {
+			// 다음 단계로 넘어갔으면 새로 활성화된 단계 결재자에게 차례 알림(이미 처리한 단계 제외)
+			notifyActiveStep(line, document.getTitle(), target.getStepNo());
+		}
+		return status;
 	}
 
 	/** 반려(AP-031/012): 사유 필수, 차례 검증 후 반려 처리(병렬이면 즉시 전체 반려). */
@@ -135,7 +153,12 @@ public class ApprovalService {
 		ApprovalLineSnapshot target = requireProcessableMember(line, actorId);
 
 		target.act(MemberState.REJECTED, OffsetDateTime.now(clock), actorId);
-		return reevaluate(document, line);
+		DocumentStatus status = reevaluate(document, line);
+		if (status == DocumentStatus.REJECTED) {
+			notificationService.create(NotificationFactory.rejected(
+				document.getDrafterId(), document.getTitle(), reason)); // 상신자에게 사유 포함 알림
+		}
+		return status;
 	}
 
 	/** 회수(AP-030): 상신자만, 누구도 승인하지 않은 경우만 가능. 보류 중에도 회수 가능(AP-013). */
@@ -228,5 +251,27 @@ public class ApprovalService {
 
 	private byte[] signaturePayload(Long documentId, int round, Long approverId) {
 		return ("doc:" + documentId + ":r" + round + ":" + approverId).getBytes(StandardCharsets.UTF_8);
+	}
+
+	/**
+	 * 현재 활성 단계의 대기 결재자에게 차례 알림 발행(NOTI-002). excludeStepNo가 주어지면 그 단계는 제외해
+	 * 같은 단계 부분 승인 시 중복 알림을 막는다(AC2). 전결 등으로 활성 단계가 없으면 알림 없음.
+	 */
+	private void notifyActiveStep(List<ApprovalLineSnapshot> line, String title,
+			Integer excludeStepNo) {
+		List<Step> steps = toSteps(line);
+		List<Integer> stepNos = distinctStepNos(line);
+		for (ApprovalLineSnapshot member : line) {
+			if (member.getState() != MemberState.PENDING) {
+				continue;
+			}
+			if (excludeStepNo != null && member.getStepNo() == excludeStepNo) {
+				continue;
+			}
+			if (ApprovalFlowEngine.isStepActive(steps, stepNos.indexOf(member.getStepNo()))) {
+				notificationService.create(
+					NotificationFactory.approvalTurn(member.getApproverId(), title));
+			}
+		}
 	}
 }

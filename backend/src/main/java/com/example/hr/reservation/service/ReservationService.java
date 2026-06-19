@@ -1,9 +1,13 @@
 package com.example.hr.reservation.service;
 
+import com.example.hr.notification.domain.NotificationFactory;
+import com.example.hr.notification.service.NotificationService;
 import com.example.hr.reservation.domain.ReservationStatus;
 import com.example.hr.reservation.domain.TimeRangeOverlap;
 import com.example.hr.reservation.entity.Reservation;
+import com.example.hr.reservation.entity.Resource;
 import com.example.hr.reservation.repository.ReservationRepository;
+import com.example.hr.reservation.repository.ResourceRepository;
 import java.time.OffsetDateTime;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,9 +20,14 @@ import org.springframework.transaction.annotation.Transactional;
 public class ReservationService {
 
 	private final ReservationRepository reservationRepository;
+	private final ResourceRepository resourceRepository;
+	private final NotificationService notificationService;
 
-	public ReservationService(ReservationRepository reservationRepository) {
+	public ReservationService(ReservationRepository reservationRepository,
+			ResourceRepository resourceRepository, NotificationService notificationService) {
 		this.reservationRepository = reservationRepository;
+		this.resourceRepository = resourceRepository;
+		this.notificationService = notificationService;
 	}
 
 	/** 즉시 예약(RSV-002/003). 기존 활성 예약과 겹치면 거부(AC1). 맞닿음은 허용(AC2). */
@@ -64,6 +73,13 @@ public class ReservationService {
 			throw new IllegalArgumentException("타인 예약 취소에는 사유가 필요합니다."); // RSV-005 AC2
 		}
 		reservation.cancel(requesterId, reason);
+		if (!self) {
+			// 관리자 취소 → 예약자에게 사유 포함 알림(NOTI-002 / RSV-005 AC3)
+			String resourceName = resourceRepository.findById(reservation.getResourceId())
+				.map(Resource::getName).orElse("자원");
+			notificationService.create(NotificationFactory.reservationCancelledByAdmin(
+				reservation.getReserverId(), resourceName, reason));
+		}
 		return reservation;
 	}
 }

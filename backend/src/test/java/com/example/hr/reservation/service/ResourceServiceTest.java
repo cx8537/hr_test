@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.example.hr.common.domain.EntityStatus;
@@ -27,14 +29,17 @@ class ResourceServiceTest {
 
 	private ResourceRepository resourceRepository;
 	private ReservationRepository reservationRepository;
+	private com.example.hr.notification.service.NotificationService notificationService;
 	private ResourceService resourceService;
 
 	@BeforeEach
 	void setUp() {
 		resourceRepository = mock(ResourceRepository.class);
 		reservationRepository = mock(ReservationRepository.class);
+		notificationService = mock(com.example.hr.notification.service.NotificationService.class);
 		Clock clock = Clock.fixed(Instant.parse("2026-06-20T00:00:00Z"), ZoneOffset.UTC);
-		resourceService = new ResourceService(resourceRepository, reservationRepository, clock);
+		resourceService = new ResourceService(resourceRepository, reservationRepository,
+			notificationService, clock);
 	}
 
 	private static OffsetDateTime t(int day, int hour) {
@@ -66,5 +71,6 @@ class ResourceServiceTest {
 		assertThat(resource.getStatus()).isEqualTo(EntityStatus.INACTIVE);
 		assertThat(future1.getStatus()).isEqualTo(ReservationStatus.CANCELLED);
 		assertThat(future2.getStatus()).isEqualTo(ReservationStatus.CANCELLED);
+		verify(notificationService, times(2)).create(any()); // 예약자별 자동취소 알림(RSV-007 AC2)
 	}
 }
