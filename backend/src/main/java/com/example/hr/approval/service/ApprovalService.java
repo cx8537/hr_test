@@ -1,6 +1,9 @@
 package com.example.hr.approval.service;
 
 import com.example.hr.approval.domain.ApprovalFlowEngine;
+import com.example.hr.approval.domain.DelegationResolver;
+import com.example.hr.approval.domain.DelegationResolver.DelegationLink;
+import com.example.hr.approval.domain.DelegationResolver.MandateLink;
 import com.example.hr.approval.domain.DocumentStatus;
 import com.example.hr.approval.domain.FormType;
 import com.example.hr.approval.domain.MemberState;
@@ -11,6 +14,8 @@ import com.example.hr.approval.entity.ApprovalDocument;
 import com.example.hr.approval.entity.ApprovalLineSnapshot;
 import com.example.hr.approval.repository.ApprovalDocumentRepository;
 import com.example.hr.approval.repository.ApprovalLineSnapshotRepository;
+import com.example.hr.approval.repository.DelegationRepository;
+import com.example.hr.approval.repository.MandateRepository;
 import com.example.hr.signature.service.SignatureValidationService;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
@@ -35,14 +40,20 @@ public class ApprovalService {
 
 	private final ApprovalDocumentRepository documentRepository;
 	private final ApprovalLineSnapshotRepository lineRepository;
+	private final DelegationRepository delegationRepository;
+	private final MandateRepository mandateRepository;
 	private final SignatureValidationService signatureValidationService;
 	private final Clock clock;
 
 	public ApprovalService(ApprovalDocumentRepository documentRepository,
 			ApprovalLineSnapshotRepository lineRepository,
+			DelegationRepository delegationRepository,
+			MandateRepository mandateRepository,
 			SignatureValidationService signatureValidationService, Clock clock) {
 		this.documentRepository = documentRepository;
 		this.lineRepository = lineRepository;
+		this.delegationRepository = delegationRepository;
+		this.mandateRepository = mandateRepository;
 		this.signatureValidationService = signatureValidationService;
 		this.clock = clock;
 	}
@@ -93,7 +104,7 @@ public class ApprovalService {
 
 	/** 승인(AP-010/034): 락 조회·상태 재검증 후 차례·서명 검증, 단계 승인 처리, 문서 상태 재평가. */
 	@Transactional
-	public DocumentStatus approve(Long documentId, Long approverId, Long publicKeyId,
+	public DocumentStatus approve(Long documentId, Long actorId, Long publicKeyId,
 			String signatureBase64) {
 		if (publicKeyId == null || signatureBase64 == null || signatureBase64.isBlank()) {
 			throw new IllegalArgumentException("승인에는 서명이 필요합니다."); // AP-034
@@ -101,28 +112,29 @@ public class ApprovalService {
 		ApprovalDocument document = getLockedDocument(documentId);
 		requireInProgress(document); // AP-033: 진행중에서만 처리(종결 상태 거부)
 		List<ApprovalLineSnapshot> line = currentLine(documentId, document.getCurrentRound());
-		ApprovalLineSnapshot target = requireActiveMember(line, approverId);
+		ApprovalLineSnapshot target = requireProcessableMember(line, actorId);
 
-		byte[] payload = signaturePayload(documentId, document.getCurrentRound(), approverId);
+		// 서명 대상은 원 결재자 단계 식별. 서명은 실제 처리자(actor) 본인 키로(AP-021/022).
+		byte[] payload = signaturePayload(documentId, document.getCurrentRound(), target.getApproverId());
 		if (!signatureValidationService.verify(publicKeyId, payload, signatureBase64)) {
 			throw new IllegalArgumentException("서명 검증에 실패했습니다."); // FND-008
 		}
-		target.act(MemberState.APPROVED, OffsetDateTime.now(clock));
+		target.act(MemberState.APPROVED, OffsetDateTime.now(clock), actorId);
 		return reevaluate(document, line);
 	}
 
 	/** 반려(AP-031/012): 사유 필수, 차례 검증 후 반려 처리(병렬이면 즉시 전체 반려). */
 	@Transactional
-	public DocumentStatus reject(Long documentId, Long approverId, String reason) {
+	public DocumentStatus reject(Long documentId, Long actorId, String reason) {
 		if (reason == null || reason.isBlank()) {
 			throw new IllegalArgumentException("반려 사유는 필수입니다."); // AP-031
 		}
 		ApprovalDocument document = getLockedDocument(documentId);
 		requireInProgress(document); // AP-033
 		List<ApprovalLineSnapshot> line = currentLine(documentId, document.getCurrentRound());
-		ApprovalLineSnapshot target = requireActiveMember(line, approverId);
+		ApprovalLineSnapshot target = requireProcessableMember(line, actorId);
 
-		target.act(MemberState.REJECTED, OffsetDateTime.now(clock));
+		target.act(MemberState.REJECTED, OffsetDateTime.now(clock), actorId);
 		return reevaluate(document, line);
 	}
 
@@ -162,19 +174,36 @@ public class ApprovalService {
 		return lineRepository.findByDocumentIdAndRoundOrderByStepNoAsc(documentId, round);
 	}
 
-	/** 결재 대기 중인 본인 단계를 찾고, 현재 차례(활성 단계)인지 검증(AP-010 AC1). */
-	private ApprovalLineSnapshot requireActiveMember(List<ApprovalLineSnapshot> line, Long approverId) {
-		ApprovalLineSnapshot target = line.stream()
-			.filter(s -> s.getApproverId().equals(approverId) && s.getState() == MemberState.PENDING)
-			.findFirst()
-			.orElseThrow(() -> new IllegalArgumentException("결재 대상이 아닙니다."));
+	/**
+	 * actor가 처리 가능한(본인 또는 유효 대결/위임) 대기 단계를 찾고 현재 차례인지 검증한다.
+	 * 처리 가능 단계가 있으나 차례가 아니면 IllegalState(AP-010 AC1), 처리 권한 자체가 없으면 IllegalArgument.
+	 */
+	private ApprovalLineSnapshot requireProcessableMember(List<ApprovalLineSnapshot> line, Long actorId) {
+		List<DelegationLink> delegations = delegationRepository.findByActiveTrue().stream()
+			.map(d -> new DelegationLink(d.getApproverId(), d.getDeputyId())).toList();
+		List<MandateLink> mandates = mandateRepository.findByActiveTrue().stream()
+			.map(m -> new MandateLink(m.getMandatorId(), m.getMandateeId())).toList();
 
 		List<Step> steps = toSteps(line);
-		int stepIndex = distinctStepNos(line).indexOf(target.getStepNo());
-		if (!ApprovalFlowEngine.isStepActive(steps, stepIndex)) {
+		List<Integer> stepNos = distinctStepNos(line);
+		ApprovalLineSnapshot processableButNotActive = null;
+		for (ApprovalLineSnapshot member : line) {
+			if (member.getState() != MemberState.PENDING) {
+				continue;
+			}
+			if (!DelegationResolver.resolve(member.getApproverId(), actorId, delegations, mandates)
+				.allowed()) {
+				continue;
+			}
+			processableButNotActive = member;
+			if (ApprovalFlowEngine.isStepActive(steps, stepNos.indexOf(member.getStepNo()))) {
+				return member;
+			}
+		}
+		if (processableButNotActive != null) {
 			throw new IllegalStateException("현재 결재 차례가 아닙니다."); // AP-010 AC1
 		}
-		return target;
+		throw new IllegalArgumentException("결재 대상이 아닙니다.");
 	}
 
 	private DocumentStatus reevaluate(ApprovalDocument document, List<ApprovalLineSnapshot> line) {

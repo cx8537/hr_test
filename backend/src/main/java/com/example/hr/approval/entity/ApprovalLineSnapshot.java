@@ -42,6 +42,10 @@ public class ApprovalLineSnapshot extends BaseEntity {
 	@Column(name = "acted_at")
 	private OffsetDateTime actedAt;
 
+	// 실제 처리자(대결/위임 시 원 결재자 approverId와 다름, AP-021/022). 원 결재자는 approverId로 보존.
+	@Column(name = "acted_by_id")
+	private Long actedById;
+
 	protected ApprovalLineSnapshot() {
 	}
 
@@ -55,10 +59,11 @@ public class ApprovalLineSnapshot extends BaseEntity {
 		this.state = MemberState.PENDING;
 	}
 
-	/** 결재자 처리(승인/반려/합의거부/생략 등)로 상태·시각 갱신. */
-	public void act(MemberState newState, OffsetDateTime at) {
+	/** 결재자 처리(승인/반려/합의거부/생략 등)로 상태·시각·실제 처리자 갱신. */
+	public void act(MemberState newState, OffsetDateTime at, Long actedById) {
 		this.state = newState;
 		this.actedAt = at;
+		this.actedById = actedById;
 	}
 
 	public Long getDocumentId() {
@@ -87,5 +92,9 @@ public class ApprovalLineSnapshot extends BaseEntity {
 
 	public OffsetDateTime getActedAt() {
 		return actedAt;
+	}
+
+	public Long getActedById() {
+		return actedById;
 	}
 }

@@ -34,6 +34,8 @@ class ApprovalServiceTest {
 
 	private ApprovalDocumentRepository documentRepository;
 	private ApprovalLineSnapshotRepository lineRepository;
+	private com.example.hr.approval.repository.DelegationRepository delegationRepository;
+	private com.example.hr.approval.repository.MandateRepository mandateRepository;
 	private SignatureValidationService signatureValidationService;
 	private ApprovalService service;
 
@@ -41,8 +43,13 @@ class ApprovalServiceTest {
 	void setUp() {
 		documentRepository = mock(ApprovalDocumentRepository.class);
 		lineRepository = mock(ApprovalLineSnapshotRepository.class);
+		delegationRepository = mock(com.example.hr.approval.repository.DelegationRepository.class);
+		mandateRepository = mock(com.example.hr.approval.repository.MandateRepository.class);
 		signatureValidationService = mock(SignatureValidationService.class);
-		service = new ApprovalService(documentRepository, lineRepository, signatureValidationService,
+		when(delegationRepository.findByActiveTrue()).thenReturn(java.util.List.of());
+		when(mandateRepository.findByActiveTrue()).thenReturn(java.util.List.of());
+		service = new ApprovalService(documentRepository, lineRepository, delegationRepository,
+			mandateRepository, signatureValidationService,
 			Clock.fixed(Instant.parse("2026-06-19T00:00:00Z"), ZoneOffset.UTC));
 	}
 
@@ -98,7 +105,7 @@ class ApprovalServiceTest {
 	void AP010_AC2_순차_전원승인_승인완료() {
 		ApprovalDocument doc = inProgressDoc();
 		ApprovalLineSnapshot s1 = member(1, 100L);
-		s1.act(MemberState.APPROVED, java.time.OffsetDateTime.now(ZoneOffset.UTC)); // 1단계 이미 승인
+		s1.act(MemberState.APPROVED, java.time.OffsetDateTime.now(ZoneOffset.UTC), 100L); // 1단계 이미 승인
 		ApprovalLineSnapshot s2 = member(2, 200L);
 		List<ApprovalLineSnapshot> line = List.of(s1, s2);
 		when(documentRepository.findWithLockById(1L)).thenReturn(Optional.of(doc));
@@ -168,7 +175,7 @@ class ApprovalServiceTest {
 	void AP030_AC2_승인이력있으면_회수거부() {
 		ApprovalDocument doc = inProgressDoc();
 		ApprovalLineSnapshot s1 = member(1, 100L);
-		s1.act(MemberState.APPROVED, java.time.OffsetDateTime.now(ZoneOffset.UTC));
+		s1.act(MemberState.APPROVED, java.time.OffsetDateTime.now(ZoneOffset.UTC), 100L);
 		when(documentRepository.findWithLockById(1L)).thenReturn(Optional.of(doc));
 		when(lineRepository.findByDocumentIdAndRoundOrderByStepNoAsc(1L, 1)).thenReturn(List.of(s1));
 
@@ -217,6 +224,54 @@ class ApprovalServiceTest {
 
 		assertThatThrownBy(() -> service.resubmit(1L, 999L,
 			List.of(new LineMemberSpec(1, 100L, StepType.SEQUENTIAL))))
+			.isInstanceOf(IllegalArgumentException.class);
+	}
+
+	@Test
+	void AP021_대결_대리인_승인처리() {
+		ApprovalDocument doc = inProgressDoc();
+		ApprovalLineSnapshot s1 = member(1, 100L); // 원 결재자 100
+		List<ApprovalLineSnapshot> line = List.of(s1);
+		when(documentRepository.findWithLockById(1L)).thenReturn(Optional.of(doc));
+		when(lineRepository.findByDocumentIdAndRoundOrderByStepNoAsc(1L, 1)).thenReturn(line);
+		// 100→300 대결 활성
+		when(delegationRepository.findByActiveTrue()).thenReturn(
+			List.of(new com.example.hr.approval.entity.Delegation(100L, 300L)));
+		when(signatureValidationService.verify(anyLong(), any(), any())).thenReturn(true);
+
+		DocumentStatus status = service.approve(1L, 300L, 7L, "sig"); // 대리인 300 처리
+
+		assertThat(status).isEqualTo(DocumentStatus.APPROVED);
+		assertThat(s1.getActedById()).isEqualTo(300L); // 실제 처리자 기록
+		assertThat(s1.getApproverId()).isEqualTo(100L); // 원 결재자 보존
+	}
+
+	@Test
+	void AP022_위임_수임자_승인처리() {
+		ApprovalDocument doc = inProgressDoc();
+		ApprovalLineSnapshot s1 = member(1, 100L);
+		List<ApprovalLineSnapshot> line = List.of(s1);
+		when(documentRepository.findWithLockById(1L)).thenReturn(Optional.of(doc));
+		when(lineRepository.findByDocumentIdAndRoundOrderByStepNoAsc(1L, 1)).thenReturn(line);
+		when(mandateRepository.findByActiveTrue()).thenReturn(
+			List.of(new com.example.hr.approval.entity.Mandate(100L, 400L)));
+		when(signatureValidationService.verify(anyLong(), any(), any())).thenReturn(true);
+
+		DocumentStatus status = service.approve(1L, 400L, 7L, "sig"); // 수임자 400 처리
+
+		assertThat(status).isEqualTo(DocumentStatus.APPROVED);
+		assertThat(s1.getActedById()).isEqualTo(400L);
+	}
+
+	@Test
+	void AP021_무관자_승인_거부() {
+		ApprovalDocument doc = inProgressDoc();
+		List<ApprovalLineSnapshot> line = List.of(member(1, 100L));
+		when(documentRepository.findWithLockById(1L)).thenReturn(Optional.of(doc));
+		when(lineRepository.findByDocumentIdAndRoundOrderByStepNoAsc(1L, 1)).thenReturn(line);
+		// 대결/위임 없음 → 999는 무관자
+
+		assertThatThrownBy(() -> service.approve(1L, 999L, 7L, "sig"))
 			.isInstanceOf(IllegalArgumentException.class);
 	}
 }
