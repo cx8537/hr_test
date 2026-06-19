@@ -8,6 +8,8 @@ export default defineConfig({
     environment: "jsdom",
     globals: true,
     setupFiles: ["./vitest.setup.ts"],
+    // e2e(Playwright)는 별도 러너 — Vitest 수집 대상에서 제외.
+    exclude: ["node_modules", "dist", ".next", "e2e/**"],
   },
   resolve: {
     alias: {
