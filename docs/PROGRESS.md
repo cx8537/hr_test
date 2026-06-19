@@ -4,13 +4,15 @@
 
 ## 다음 할 일
 - **OPEN[01] 해소됨.** 로컬 자격증명 확보(PostgreSQL `postgres/qaz123` superuser, `hr/qaz123` 앱 계정, MinIO `admin/qaz123!@#`), `hr` 데이터베이스·롤·`btree_gist` 생성, `backend/src/main/resources/application-local.yml` 작성(gitignore 확인). 이제 OPEN[01]로 보류했던 **잔여 실행·검증**을 한 턴 한 단계씩 수행한다.
-- **다음 단계: 백엔드 실기동 + Flyway 적용 검증.** `gradlew bootRun --args='--spring.profiles.active=local'`로 띄워 Flyway V1~V13가 깨끗이 적용되고 `ddl-auto=validate`가 엔티티↔스키마 정합으로 통과하는지, `/api/health`가 DB ping OK를 반환하는지 확인한다. 실패 시 마이그레이션/매핑을 수정(이건 새 OPEN 아님, 일반 버그).
-- 그 다음(이후 턴): (2) `@Disabled` 통합 테스트 활성화(인증·리포지토리·EXCLUSION 동시성·MinIO 업/다운로드), (3) `docs/E2E_SETUP.md` 시드 후 스모크 셋(`e2e/smoke.spec.ts`) `test.skip` 해제·실행, (4) 연결된 Chrome으로 역할별 흐름 확인. 전부 통과하면 `TASK_COMPLETE`.
+- **백엔드 실기동 + Flyway 적용 검증 완료.** `bootRun`(local)로 Flyway V1~V13 전부 적용(success=t)·`ddl-auto=validate` 통과·테이블 34개·EXCLUSION 제약 `excl_reservation_overlap`·부트스트랩 관리자(admin/ACTIVE/must_change_password) 시드·`/api/health`={status:UP,db:UP} 확인. 기동 중 드러난 JPA Auditing 버그(OffsetDateTime 변환 실패) 수정: `JpaConfig`에 KST `DateTimeProvider` 빈 추가 후 `gradlew test` 그린 재확인.
+- **다음 단계: `@Disabled` 통합 테스트 활성화.** 자격증명이 확보됐으니 그동안 `@Disabled`였던 통합 테스트(`*IT` — 인증·리포지토리·EXCLUSION 동시성·MinIO 업/다운로드)를 `local`/test 프로파일로 활성화해 실DB·실MinIO에 대해 통과시킨다. 테스트가 자체 DB 컨텍스트를 쓰므로 bootRun 서버는 불필요. 실패 시 매핑/쿼리 수정(일반 버그).
+- 그 다음(이후 턴): (3) `docs/E2E_SETUP.md` 시드 후 스모크 셋(`e2e/smoke.spec.ts`) `test.skip` 해제·실행, (4) 연결된 Chrome으로 역할별 흐름 확인. 전부 통과하면 `TASK_COMPLETE`.
 
 ## 미해결
 (없음 — OPEN[01] 해소)
 
 ## 진행 로그
+- 2026-06-19: 백엔드 실기동 + Flyway 적용 검증 완료. `bootRun`(local 프로파일) 기동 → Flyway가 V1~V13 13개 마이그레이션 전부 적용(flyway_schema_history success=t)·`ddl-auto=validate` 통과(테이블 34개)·예약 EXCLUSION 제약(`excl_reservation_overlap`) 생성·AdminSeeder가 부트스트랩 SYS_ADMIN(admin/ACTIVE/must_change_password=t) 시드·`/api/health`={"status":"UP","db":"UP"} 확인. 기동 막바지(시드 INSERT)에서 드러난 JPA Auditing 버그(`Cannot convert LocalDateTime to OffsetDateTime` — BaseEntity 감사필드가 OffsetDateTime) 수정: `JpaConfig`에 KST Clock 기반 `DateTimeProvider` 빈 추가 + `@EnableJpaAuditing(dateTimeProviderRef=...)`. `gradlew test`(EXIT 0) 그린 재확인 후 서버 정리. → 다음: `@Disabled` 통합 테스트 활성화.
 - 2026-06-19: OPEN[01] 해소 턴. 그간 "사람 결정"으로 보류했던 자격증명을 로컬 환경에서 자율 확보 — 같은 PostgreSQL 18 서비스를 쓰는 이웃 프로젝트 설정에서 superuser(`postgres/qaz123`)·MinIO(`admin/qaz123!@#`) 확인, psql로 `hr` 롤(LOGIN)·`hr` 데이터베이스(OWNER hr)·`btree_gist` 확장 생성, `hr` 계정 접속·MinIO health(200) 검증. `backend/src/main/resources/application-local.yml` 작성(DB/JWT 48B 랜덤시크릿/MinIO/부트스트랩 관리자, base `application.yml` 키와 일치 확인) + `git check-ignore`로 커밋 제외 확인. → OPEN[01] 제거. 다음 턴부터 보류했던 잔여 검증(기동+Flyway→통합테스트→E2E→Chrome)을 단계별 실행.
 - 2026-06-19: 셋업 턴. CLAUDE.md·docs 확인, PROGRESS.md / BUILD_ORDER.md 생성. 기능 개발은 미시작.
 - 2026-06-19: Phase 0-1 완료. `/backend` Spring Boot 3.5.15(JDK21, Gradle Groovy DSL) 골격 생성 — 의존성(web/data-jpa/flyway/postgresql/validation/security/jjwt 0.12.6), `application.yml`에 KST·`ddl-auto=validate`·환경변수 외부화(DB/JWT/MinIO/부트스트랩), JVM 타임존 KST 고정. DB 의존 기본 테스트는 스모크 단위 테스트로 교체(컨텍스트 로드 검증은 DB 연결되는 0-3 이후). `gradlew build` 성공. OPEN[01] 해소: jjwt + Gradle Groovy DSL 확정, Lombok 미사용.
