@@ -8,8 +8,12 @@ import com.example.hr.auth.repository.RefreshTokenRepository;
 import com.example.hr.common.domain.EntityStatus;
 import com.example.hr.org.entity.Employee;
 import com.example.hr.org.repository.EmployeeRepository;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Clock;
 import java.time.OffsetDateTime;
+import java.util.HexFormat;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.DisabledException;
@@ -62,9 +66,10 @@ public class AuthService {
 		String refreshToken = jwtTokenProvider.createRefreshToken(subject);
 
 		OffsetDateTime now = OffsetDateTime.now(clock);
+		// refresh 토큰은 고엔트로피 JWT(>72바이트)라 BCrypt 대신 SHA-256으로 해시 저장한다.
 		refreshTokenRepository.save(new RefreshToken(
 			employee.getId(),
-			passwordEncoder.encode(refreshToken),
+			hashToken(refreshToken),
 			now,
 			now.plusNanos(refreshExpiresMs * 1_000_000)));
 
@@ -90,5 +95,16 @@ public class AuthService {
 		}
 		String accessToken = jwtTokenProvider.createAccessToken(subject, employee.getTokenVersion());
 		return new TokenResponse(accessToken);
+	}
+
+	/** refresh 토큰 저장용 SHA-256 해시(16진). 평문 토큰을 DB에 두지 않기 위함. */
+	private static String hashToken(String token) {
+		try {
+			byte[] digest = MessageDigest.getInstance("SHA-256")
+				.digest(token.getBytes(StandardCharsets.UTF_8));
+			return HexFormat.of().formatHex(digest);
+		} catch (NoSuchAlgorithmException e) {
+			throw new IllegalStateException("SHA-256 미지원 환경", e);
+		}
 	}
 }

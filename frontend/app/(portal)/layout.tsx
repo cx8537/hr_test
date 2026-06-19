@@ -1,6 +1,8 @@
 // 포털(일반 업무 + 범위 관리) 레이아웃. 역할별 흐름 진입점(메뉴) 제공.
 // 메뉴 노출은 UX 보조이며, 권한의 실제 강제는 백엔드 RBAC가 한다(FND-010).
+// 미인증 접근은 RequireAuth로 /login 리다이렉트(FND-010 AC1, UX 보조).
 import Link from "next/link";
+import { RequireAuth } from "@/components/require-auth";
 
 const NAV = [
   { href: "/dashboard", label: "대시보드" },
@@ -18,15 +20,17 @@ export default function PortalLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="min-h-screen">
-      <nav className="flex flex-wrap gap-3 border-b bg-gray-50 px-4 py-2 text-sm">
-        {NAV.map((item) => (
-          <Link key={item.href} href={item.href} className="text-gray-700 hover:underline">
-            {item.label}
-          </Link>
-        ))}
-      </nav>
-      <section>{children}</section>
-    </div>
+    <RequireAuth>
+      <div className="min-h-screen">
+        <nav className="flex flex-wrap gap-3 border-b bg-gray-50 px-4 py-2 text-sm">
+          {NAV.map((item) => (
+            <Link key={item.href} href={item.href} className="text-gray-700 hover:underline">
+              {item.label}
+            </Link>
+          ))}
+        </nav>
+        <section>{children}</section>
+      </div>
+    </RequireAuth>
   );
 }

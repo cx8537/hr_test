@@ -3,7 +3,6 @@ package com.example.hr.auth;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -63,7 +62,7 @@ class AuthServiceTest {
 		Employee emp = activeEmployee(true);
 		when(employeeRepository.findByLoginId("hong")).thenReturn(Optional.of(emp));
 		when(passwordEncoder.matches("pw", "$2a$10$hash")).thenReturn(true);
-		when(passwordEncoder.encode(anyString())).thenReturn("hashed-refresh");
+		// refresh 토큰은 SHA-256으로 해시 저장(BCrypt encode 미사용)
 
 		LoginResponse res = authService.login("hong", "pw");
 
