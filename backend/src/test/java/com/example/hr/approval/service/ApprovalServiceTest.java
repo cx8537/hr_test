@@ -85,7 +85,7 @@ class ApprovalServiceTest {
 	void AP010_AC1_차례아닌_단계_승인_거부() {
 		ApprovalDocument doc = inProgressDoc();
 		List<ApprovalLineSnapshot> line = List.of(member(1, 100L), member(2, 200L));
-		when(documentRepository.findById(1L)).thenReturn(Optional.of(doc));
+		when(documentRepository.findWithLockById(1L)).thenReturn(Optional.of(doc));
 		when(lineRepository.findByDocumentIdAndRoundOrderByStepNoAsc(1L, 1)).thenReturn(line);
 
 		// 2단계 결재자(200)가 1단계 미완료 상태에서 승인 시도
@@ -101,7 +101,7 @@ class ApprovalServiceTest {
 		s1.act(MemberState.APPROVED, java.time.OffsetDateTime.now(ZoneOffset.UTC)); // 1단계 이미 승인
 		ApprovalLineSnapshot s2 = member(2, 200L);
 		List<ApprovalLineSnapshot> line = List.of(s1, s2);
-		when(documentRepository.findById(1L)).thenReturn(Optional.of(doc));
+		when(documentRepository.findWithLockById(1L)).thenReturn(Optional.of(doc));
 		when(lineRepository.findByDocumentIdAndRoundOrderByStepNoAsc(1L, 1)).thenReturn(line);
 		when(signatureValidationService.verify(eq(5L), any(), eq("sig"))).thenReturn(true);
 
@@ -115,7 +115,7 @@ class ApprovalServiceTest {
 	void FND008_서명검증실패시_승인거부() {
 		ApprovalDocument doc = inProgressDoc();
 		List<ApprovalLineSnapshot> line = List.of(member(1, 100L));
-		when(documentRepository.findById(1L)).thenReturn(Optional.of(doc));
+		when(documentRepository.findWithLockById(1L)).thenReturn(Optional.of(doc));
 		when(lineRepository.findByDocumentIdAndRoundOrderByStepNoAsc(1L, 1)).thenReturn(line);
 		when(signatureValidationService.verify(anyLong(), any(), any())).thenReturn(false);
 
@@ -133,11 +133,55 @@ class ApprovalServiceTest {
 	void AP031_반려시_문서_반려상태() {
 		ApprovalDocument doc = inProgressDoc();
 		List<ApprovalLineSnapshot> line = List.of(member(1, 100L));
-		when(documentRepository.findById(1L)).thenReturn(Optional.of(doc));
+		when(documentRepository.findWithLockById(1L)).thenReturn(Optional.of(doc));
 		when(lineRepository.findByDocumentIdAndRoundOrderByStepNoAsc(1L, 1)).thenReturn(line);
 
 		DocumentStatus status = service.reject(1L, 100L, "보완 필요");
 
 		assertThat(status).isEqualTo(DocumentStatus.REJECTED);
+	}
+
+	@Test
+	void AP033_AC1_종결상태_문서_승인거부() {
+		ApprovalDocument doc = inProgressDoc();
+		doc.changeStatus(DocumentStatus.APPROVED); // 이미 승인완료
+		when(documentRepository.findWithLockById(1L)).thenReturn(Optional.of(doc));
+
+		assertThatThrownBy(() -> service.approve(1L, 100L, 5L, "sig"))
+			.isInstanceOf(IllegalStateException.class);
+		verify(signatureValidationService, never()).verify(anyLong(), any(), any());
+	}
+
+	@Test
+	void AP030_AC1_무승인_회수성공() {
+		ApprovalDocument doc = inProgressDoc(); // 상신자 10L
+		List<ApprovalLineSnapshot> line = List.of(member(1, 100L), member(2, 200L)); // 전부 PENDING
+		when(documentRepository.findWithLockById(1L)).thenReturn(Optional.of(doc));
+		when(lineRepository.findByDocumentIdAndRoundOrderByStepNoAsc(1L, 1)).thenReturn(line);
+
+		DocumentStatus status = service.withdraw(1L, 10L);
+
+		assertThat(status).isEqualTo(DocumentStatus.WITHDRAWN);
+	}
+
+	@Test
+	void AP030_AC2_승인이력있으면_회수거부() {
+		ApprovalDocument doc = inProgressDoc();
+		ApprovalLineSnapshot s1 = member(1, 100L);
+		s1.act(MemberState.APPROVED, java.time.OffsetDateTime.now(ZoneOffset.UTC));
+		when(documentRepository.findWithLockById(1L)).thenReturn(Optional.of(doc));
+		when(lineRepository.findByDocumentIdAndRoundOrderByStepNoAsc(1L, 1)).thenReturn(List.of(s1));
+
+		assertThatThrownBy(() -> service.withdraw(1L, 10L))
+			.isInstanceOf(IllegalStateException.class);
+	}
+
+	@Test
+	void AP030_상신자아니면_회수거부() {
+		ApprovalDocument doc = inProgressDoc(); // 상신자 10L
+		when(documentRepository.findWithLockById(1L)).thenReturn(Optional.of(doc));
+
+		assertThatThrownBy(() -> service.withdraw(1L, 999L))
+			.isInstanceOf(IllegalArgumentException.class);
 	}
 }

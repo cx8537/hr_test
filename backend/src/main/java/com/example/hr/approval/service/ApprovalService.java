@@ -65,14 +65,15 @@ public class ApprovalService {
 		return document;
 	}
 
-	/** 승인(AP-010/034): 차례 검증 후 서명을 검증하고 단계를 승인 처리, 문서 상태 재평가. */
+	/** 승인(AP-010/034): 락 조회·상태 재검증 후 차례·서명 검증, 단계 승인 처리, 문서 상태 재평가. */
 	@Transactional
 	public DocumentStatus approve(Long documentId, Long approverId, Long publicKeyId,
 			String signatureBase64) {
 		if (publicKeyId == null || signatureBase64 == null || signatureBase64.isBlank()) {
 			throw new IllegalArgumentException("승인에는 서명이 필요합니다."); // AP-034
 		}
-		ApprovalDocument document = getDocument(documentId);
+		ApprovalDocument document = getLockedDocument(documentId);
+		requireInProgress(document); // AP-033: 진행중에서만 처리(종결 상태 거부)
 		List<ApprovalLineSnapshot> line = currentLine(documentId, document.getCurrentRound());
 		ApprovalLineSnapshot target = requireActiveMember(line, approverId);
 
@@ -90,7 +91,8 @@ public class ApprovalService {
 		if (reason == null || reason.isBlank()) {
 			throw new IllegalArgumentException("반려 사유는 필수입니다."); // AP-031
 		}
-		ApprovalDocument document = getDocument(documentId);
+		ApprovalDocument document = getLockedDocument(documentId);
+		requireInProgress(document); // AP-033
 		List<ApprovalLineSnapshot> line = currentLine(documentId, document.getCurrentRound());
 		ApprovalLineSnapshot target = requireActiveMember(line, approverId);
 
@@ -98,9 +100,36 @@ public class ApprovalService {
 		return reevaluate(document, line);
 	}
 
-	private ApprovalDocument getDocument(Long documentId) {
-		return documentRepository.findById(documentId)
+	/** 회수(AP-030): 상신자만, 누구도 승인하지 않은 경우만 가능. 보류 중에도 회수 가능(AP-013). */
+	@Transactional
+	public DocumentStatus withdraw(Long documentId, Long requesterId) {
+		ApprovalDocument document = getLockedDocument(documentId);
+		if (!document.getDrafterId().equals(requesterId)) {
+			throw new IllegalArgumentException("상신자만 회수할 수 있습니다.");
+		}
+		if (document.getStatus() != DocumentStatus.IN_PROGRESS
+			&& document.getStatus() != DocumentStatus.ON_HOLD) {
+			throw new IllegalStateException("진행 중/보류 문서만 회수할 수 있습니다."); // AP-033 AC1
+		}
+		List<ApprovalLineSnapshot> line = currentLine(documentId, document.getCurrentRound());
+		boolean anyApproved = line.stream().anyMatch(s -> s.getState() == MemberState.APPROVED);
+		if (anyApproved) {
+			throw new IllegalStateException("이미 승인된 결재는 회수할 수 없습니다."); // AP-030 AC2
+		}
+		document.changeStatus(DocumentStatus.WITHDRAWN);
+		return DocumentStatus.WITHDRAWN;
+	}
+
+	private ApprovalDocument getLockedDocument(Long documentId) {
+		return documentRepository.findWithLockById(documentId)
 			.orElseThrow(() -> new IllegalArgumentException("결재 문서를 찾을 수 없습니다."));
+	}
+
+	/** 상태 재검증(AP-033): 진행 중 문서만 승인/반려 처리 허용. */
+	private void requireInProgress(ApprovalDocument document) {
+		if (document.getStatus() != DocumentStatus.IN_PROGRESS) {
+			throw new IllegalStateException("진행 중 문서만 결재할 수 있습니다.");
+		}
 	}
 
 	private List<ApprovalLineSnapshot> currentLine(Long documentId, int round) {
