@@ -1,6 +1,8 @@
 package com.example.hr.common.storage;
 
+import io.minio.BucketExistsArgs;
 import io.minio.GetObjectArgs;
+import io.minio.MakeBucketArgs;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
 import io.minio.RemoveObjectArgs;
@@ -29,6 +31,20 @@ public class MinioFileStorage implements FileStorage {
 			.credentials(accessKey, secretKey)
 			.build();
 		this.bucket = bucket;
+		ensureBucket();
+	}
+
+	/** 버킷이 없으면 생성한다(최초 기동 시 1회). */
+	private void ensureBucket() {
+		try {
+			boolean exists = client.bucketExists(
+				BucketExistsArgs.builder().bucket(bucket).build());
+			if (!exists) {
+				client.makeBucket(MakeBucketArgs.builder().bucket(bucket).build());
+			}
+		} catch (Exception e) {
+			throw new IllegalStateException("MinIO 버킷 준비에 실패했습니다.", e);
+		}
 	}
 
 	@Override

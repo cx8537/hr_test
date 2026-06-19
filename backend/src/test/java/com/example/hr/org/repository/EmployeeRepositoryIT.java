@@ -4,22 +4,27 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.example.hr.common.domain.EntityStatus;
+import com.example.hr.config.ClockConfig;
+import com.example.hr.config.JpaConfig;
 import com.example.hr.org.entity.Department;
 import com.example.hr.org.entity.Employee;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase.Replace;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.context.annotation.Import;
+import org.springframework.test.context.ActiveProfiles;
 
 /**
- * FND 영속성 통합 테스트(로컬 PostgreSQL 테스트 스키마).
- * OPEN[01]: DB 자격증명/`application-local.yml` 확보 후 @Disabled 를 제거하고 실행한다.
+ * FND 영속성 통합 테스트(로컬 PostgreSQL `hr` DB).
+ * local 프로파일로 application-local.yml의 실 자격증명을 사용하고,
+ * JPA Auditing(OffsetDateTime DateTimeProvider) 설정을 import 해 created_at 자동 채움을 검증한다.
  */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = Replace.NONE)
-@Disabled("OPEN[01]: 로컬 PostgreSQL 자격증명 확보 후 활성화")
+@ActiveProfiles("local")
+@Import({JpaConfig.class, ClockConfig.class})
 class EmployeeRepositoryIT {
 
 	@Autowired

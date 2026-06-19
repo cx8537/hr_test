@@ -35,7 +35,7 @@ app:
     endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
     access-key: ${MINIO_ACCESS_KEY:}
     secret-key: ${MINIO_SECRET_KEY:}
-    bucket: ${MINIO_BUCKET:hr}
+    bucket: ${MINIO_BUCKET:hr-files}   # S3 규칙상 3자 이상
   bootstrap-admin:
     login-id: ${BOOTSTRAP_ADMIN_LOGIN_ID:admin}
     init-password: ${BOOTSTRAP_ADMIN_INIT_PASSWORD:}
