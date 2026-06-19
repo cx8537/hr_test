@@ -4,17 +4,21 @@ import com.example.hr.common.domain.EntityStatus;
 import com.example.hr.org.domain.DepartmentTree;
 import com.example.hr.org.entity.Department;
 import com.example.hr.org.repository.DepartmentRepository;
+import com.example.hr.org.repository.EmployeeRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 부서 관리(FND-002). 3단계 트리 강제, 코드 중복 거부, 비활성화=소프트삭제. */
+/** 부서 관리(FND-002). 3단계 트리 강제, 코드 중복 거부, 비활성화=소프트삭제(직원 잔존 시 거부 LIFE-B2). */
 @Service
 public class DepartmentService {
 
 	private final DepartmentRepository departmentRepository;
+	private final EmployeeRepository employeeRepository;
 
-	public DepartmentService(DepartmentRepository departmentRepository) {
+	public DepartmentService(DepartmentRepository departmentRepository,
+			EmployeeRepository employeeRepository) {
 		this.departmentRepository = departmentRepository;
+		this.employeeRepository = employeeRepository;
 	}
 
 	@Transactional
@@ -40,6 +44,9 @@ public class DepartmentService {
 	public void deactivate(Long id) {
 		Department dept = departmentRepository.findById(id)
 			.orElseThrow(() -> new IllegalArgumentException("부서를 찾을 수 없습니다."));
+		if (employeeRepository.existsByDeptIdAndStatus(id, EntityStatus.ACTIVE)) {
+			throw new IllegalStateException("소속 직원이 있어 부서를 비활성화할 수 없습니다."); // LIFE-B2 AC1
+		}
 		dept.deactivate();
 	}
 }

@@ -18,12 +18,14 @@ import org.junit.jupiter.api.Test;
 class DepartmentServiceTest {
 
 	private DepartmentRepository departmentRepository;
+	private com.example.hr.org.repository.EmployeeRepository employeeRepository;
 	private DepartmentService departmentService;
 
 	@BeforeEach
 	void setUp() {
 		departmentRepository = mock(DepartmentRepository.class);
-		departmentService = new DepartmentService(departmentRepository);
+		employeeRepository = mock(com.example.hr.org.repository.EmployeeRepository.class);
+		departmentService = new DepartmentService(departmentRepository, employeeRepository);
 	}
 
 	@Test
@@ -57,6 +59,29 @@ class DepartmentServiceTest {
 	void FND002_AC2_비활성화_소프트삭제() {
 		Department dept = new Department("HQ", "본사", null, 1, EntityStatus.ACTIVE);
 		when(departmentRepository.findById(1L)).thenReturn(Optional.of(dept));
+		when(employeeRepository.existsByDeptIdAndStatus(1L, EntityStatus.ACTIVE)).thenReturn(false);
+
+		departmentService.deactivate(1L);
+
+		org.assertj.core.api.Assertions.assertThat(dept.getStatus()).isEqualTo(EntityStatus.INACTIVE);
+	}
+
+	@Test
+	void LIFEB2_AC1_소속직원_잔존시_비활성화_거부() {
+		Department dept = new Department("HQ", "본사", null, 1, EntityStatus.ACTIVE);
+		when(departmentRepository.findById(1L)).thenReturn(Optional.of(dept));
+		when(employeeRepository.existsByDeptIdAndStatus(1L, EntityStatus.ACTIVE)).thenReturn(true);
+
+		assertThatThrownBy(() -> departmentService.deactivate(1L))
+			.isInstanceOf(IllegalStateException.class);
+		org.assertj.core.api.Assertions.assertThat(dept.getStatus()).isEqualTo(EntityStatus.ACTIVE);
+	}
+
+	@Test
+	void LIFEB2_AC2_직원_없으면_비활성화_허용() {
+		Department dept = new Department("HQ", "본사", null, 1, EntityStatus.ACTIVE);
+		when(departmentRepository.findById(1L)).thenReturn(Optional.of(dept));
+		when(employeeRepository.existsByDeptIdAndStatus(1L, EntityStatus.ACTIVE)).thenReturn(false);
 
 		departmentService.deactivate(1L);
 
