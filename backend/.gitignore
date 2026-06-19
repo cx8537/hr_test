@@ -1,6 +1,10 @@
 HELP.md
 .gradle
 build/
+
+### 로컬 비밀 설정(커밋 금지) ###
+application-local.yml
+src/main/resources/application-local.yml
 !gradle/wrapper/gradle-wrapper.jar
 !**/src/main/**/build/
 !**/src/test/**/build/

@@ -1,0 +1,25 @@
+# 로컬 개발용 설정 예시 파일.
+# 이 파일을 복사해 `application-local.yml` 로 만들고 실제 값을 채운다.
+#   - 실행: `gradlew bootRun --args='--spring.profiles.active=local'`
+#     또는 환경변수 SPRING_PROFILES_ACTIVE=local
+# !! `application-local.yml` 은 절대 커밋하지 않는다(.gitignore 처리). 비밀값은 여기 예시에 넣지 않는다.
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/hr
+    username: hr
+    password: __CHANGE_ME__
+
+app:
+  jwt:
+    # 256비트 이상 무작위 시크릿(예: openssl rand -base64 48)
+    secret: __CHANGE_ME__
+    access-expires-in: 900000        # 15분(ms)
+    refresh-expires-in: 1209600000   # 14일(ms)
+  minio:
+    endpoint: http://localhost:9000
+    access-key: __CHANGE_ME__
+    secret-key: __CHANGE_ME__
+    bucket: hr
+  bootstrap-admin:
+    login-id: admin
+    init-password: __CHANGE_ME__     # 최초 로그인 시 변경 강제

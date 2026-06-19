@@ -23,6 +23,9 @@ spring:
 
 # 애플리케이션 고유 설정(전부 환경변수 외부화)
 app:
+  cors:
+    # 개발 프론트 오리진(3000). 쉼표 구분 다중 허용.
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
   jwt:
     secret: ${JWT_SECRET:}
     access-expires-in: ${JWT_ACCESS_EXPIRES_IN:900000}        # 15분(ms)
