@@ -8,4 +8,7 @@ public interface ApprovalLineSnapshotRepository extends JpaRepository<ApprovalLi
 
 	/** 현재 라운드 결재선을 단계 순서대로 조회. */
 	List<ApprovalLineSnapshot> findByDocumentIdAndRoundOrderByStepNoAsc(Long documentId, int round);
+
+	/** 문서의 모든 라운드 스냅샷(관여자 판정용). */
+	List<ApprovalLineSnapshot> findByDocumentId(Long documentId);
 }

@@ -31,6 +31,7 @@ app:
     access-expires-in: ${JWT_ACCESS_EXPIRES_IN:900000}        # 15분(ms)
     refresh-expires-in: ${JWT_REFRESH_EXPIRES_IN:1209600000}  # 14일(ms)
   minio:
+    enabled: ${MINIO_ENABLED:false}          # 자격증명 확보 후 true (OPEN[01])
     endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
     access-key: ${MINIO_ACCESS_KEY:}
     secret-key: ${MINIO_SECRET_KEY:}
