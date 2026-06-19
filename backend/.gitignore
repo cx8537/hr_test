@@ -39,3 +39,7 @@ out/
 
 ### VS Code ###
 .vscode/
+
+# 런타임 로그(추적 금지)
+*.log
+bootrun.log

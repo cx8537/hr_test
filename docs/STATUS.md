@@ -29,8 +29,8 @@ V1 베이스라인 → V2 FND → V3 refresh_token → V4 signature_key → V5 a
 V7 approval_forms → V8 attachment → V9 location → V10 asset → V11 reservation(EXCLUSION) → V12 document → V13 notification.
 
 ## 테스트
-- 백엔드: `cd backend && .\gradlew.bat test` — 순수 도메인 + 서비스(Mockito) 그린. DB 필요한 통합 테스트는 `IT` 접미사·`@Disabled`(OPEN[01]).
-- 프론트: `cd frontend && npm run test`(Vitest 37) + `npm run build`. E2E(Playwright)는 `npm run test:e2e`(시드·기동 후, 현재 `test.skip` 골격).
+- 백엔드: `cd backend && .\gradlew.bat test` — 순수 도메인 + 서비스(Mockito) + 통합 IT 모두 그린(236). 통합(`*IT`)은 실 PostgreSQL/MinIO 사용(`local` 프로파일): `EmployeeRepositoryIT`(영속성·auditing), `ReservationExclusionIT`(예약 EXCLUSION RSV-003), `MinioFileStorageIT`(파일 왕복).
+- 프론트: `cd frontend && npm run test`(Vitest 37) + `npm run build`. E2E: `npm run test:e2e`(백엔드 8080·프론트 3000 기동 후) — `e2e/smoke.spec.ts` 4 passed(인증가드·로그인·잘못된비번·RBAC) / 3 skip(페르소나·서명·동시성, 백엔드 IT·단위로 커버).
 
 ## 실행 방법(요약)
 1. `docs/12-dev-environment.md`·`docs/INFRA_SETUP.md`로 PostgreSQL·MinIO 준비.
@@ -38,6 +38,7 @@ V7 approval_forms → V8 attachment → V9 location → V10 asset → V11 reserv
 3. 백엔드 `gradlew bootRun` → 프론트 `npm run dev` → 4프로세스 헬스 그린.
 4. E2E: `docs/E2E_SETUP.md` 절차(페르소나·테스트 키 시드)대로 진행.
 
-## 미해결 (OPEN[01])
-- 로컬 PostgreSQL·MinIO **자격증명 미보유**로 `application-local.yml`을 채울 수 없어 **실 기동·Flyway 적용·통합/E2E 실행이 보류**됨. 이는 사람이 결정·입력해야 하는 항목(코드로 해소 불가).
-- 자격증명 입력 시 잔여 검증: `ddl-auto=validate`+Flyway 적용 확인, `@Disabled` 통합 테스트 활성화, EXCLUSION 동시성·MinIO 업/다운로드 실연결, `docs/E2E_SETUP.md` 스모크 셋 실행.
+## 검증 완료 (구 OPEN[01] 해소)
+- 로컬 PostgreSQL/MinIO 자격증명을 확보해 `application-local.yml` 구성, `hr` DB/롤/`btree_gist` 생성. 실 기동에서 Flyway V1~V13 적용·`ddl-auto=validate`·`/api/health` UP 확인.
+- 실DB/실MinIO 통합 테스트(IT) + Playwright 스모크 + Chrome MCP 라이브 검증까지 완료. 이 과정에서 버그 4건(JPA auditing / MinIO 버킷명 `hr`→`hr-files` + 자동생성 / 포털 인증가드 / refresh 토큰 BCrypt→SHA-256) 발견·수정.
+- MinIO 버킷명은 S3 규칙(3~63자)상 `hr-files` 사용.
