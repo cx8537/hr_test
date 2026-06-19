@@ -250,4 +250,95 @@ export async function listLocationPhotos(
   return apiFetch<LocationPhotoResponse[]>(`/api/locations/${locationId}/photos`);
 }
 
+// --- 비품 API (AST-001~004) ---
+export type AssetManagementType = "INDIVIDUAL" | "QUANTITY";
+export type IndividualAssetStatus =
+  | "USING"
+  | "STORAGE"
+  | "REPAIR"
+  | "DISCARDED";
+export type StockTransactionType = "IN" | "OUT";
+
+export interface AssetItemResponse {
+  id: number;
+  locationId: number;
+  name: string;
+  managementType: AssetManagementType;
+}
+
+export interface IndividualAssetResponse {
+  id: number;
+  assetItemId: number;
+  assetNumber: string;
+  status: IndividualAssetStatus;
+  acquisitionDate: string | null;
+}
+
+/** 품목 등록(AST-001, 비품관리자). */
+export async function createAssetItem(payload: {
+  locationId: number;
+  name: string;
+  managementType: AssetManagementType;
+}): Promise<AssetItemResponse> {
+  return apiFetch<AssetItemResponse>("/api/assets/items", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+/** 개체 등록(AST-002). */
+export async function createIndividualAsset(
+  itemId: number,
+  payload: {
+    assetNumber: string;
+    status: IndividualAssetStatus;
+    acquisitionDate?: string;
+  },
+): Promise<IndividualAssetResponse> {
+  return apiFetch<IndividualAssetResponse>(
+    `/api/assets/items/${itemId}/individuals`,
+    { method: "POST", body: JSON.stringify(payload) },
+  );
+}
+
+/** 개체 상태 변경(AST-002 AC2). */
+export async function changeIndividualStatus(
+  individualId: number,
+  status: IndividualAssetStatus,
+): Promise<IndividualAssetResponse> {
+  return apiFetch<IndividualAssetResponse>(
+    `/api/assets/individuals/${individualId}/status`,
+    { method: "PUT", body: JSON.stringify({ status }) },
+  );
+}
+
+/** 개체 폐기(AST-004: 보존). */
+export async function discardIndividualAsset(
+  individualId: number,
+): Promise<IndividualAssetResponse> {
+  return apiFetch<IndividualAssetResponse>(
+    `/api/assets/individuals/${individualId}/discard`,
+    { method: "POST" },
+  );
+}
+
+/** 입출고 등록(AST-003 AC1). */
+export async function recordStock(
+  itemId: number,
+  type: StockTransactionType,
+  quantity: number,
+): Promise<void> {
+  return apiFetch<void>(`/api/assets/items/${itemId}/stock`, {
+    method: "POST",
+    body: JSON.stringify({ type, quantity }),
+  });
+}
+
+/** 현재 수량 조회(AST-003 AC2, 파생). */
+export async function getAssetQuantity(
+  itemId: number,
+): Promise<{ assetItemId: number; currentQuantity: number }> {
+  return apiFetch(`/api/assets/items/${itemId}/quantity`);
+}
+
 export { API_BASE_URL };
