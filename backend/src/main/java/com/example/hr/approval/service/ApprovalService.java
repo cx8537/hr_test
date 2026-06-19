@@ -65,6 +65,32 @@ public class ApprovalService {
 		return document;
 	}
 
+	/**
+	 * 반려 문서 재상신(AP-032): 반려 문서를 같은 문서로 재상신한다. 라운드를 올려 결재선을
+	 * 1단계부터 새로 생성하며(이전 라운드 스냅샷·서명은 보존·판정 제외 AC2/AC3), 진행중으로 재개.
+	 */
+	@Transactional
+	public ApprovalDocument resubmit(Long documentId, Long requesterId, List<LineMemberSpec> line) {
+		if (line == null || line.isEmpty()) {
+			throw new IllegalArgumentException("결재선이 비어 있습니다.");
+		}
+		ApprovalDocument document = getLockedDocument(documentId);
+		if (!document.getDrafterId().equals(requesterId)) {
+			throw new IllegalArgumentException("상신자만 재상신할 수 있습니다.");
+		}
+		if (document.getStatus() != DocumentStatus.REJECTED) {
+			throw new IllegalStateException("반려된 문서만 재상신할 수 있습니다."); // AP-032
+		}
+		document.nextRound(); // 새 라운드(이전 라운드 스냅샷은 보존)
+		for (LineMemberSpec spec : line) {
+			lineRepository.save(new ApprovalLineSnapshot(
+				documentId, document.getCurrentRound(), spec.stepNo(), spec.approverId(),
+				spec.stepType()));
+		}
+		document.changeStatus(DocumentStatus.IN_PROGRESS);
+		return document;
+	}
+
 	/** 승인(AP-010/034): 락 조회·상태 재검증 후 차례·서명 검증, 단계 승인 처리, 문서 상태 재평가. */
 	@Transactional
 	public DocumentStatus approve(Long documentId, Long approverId, Long publicKeyId,

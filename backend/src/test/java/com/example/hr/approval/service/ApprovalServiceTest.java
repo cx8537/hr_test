@@ -184,4 +184,39 @@ class ApprovalServiceTest {
 		assertThatThrownBy(() -> service.withdraw(1L, 999L))
 			.isInstanceOf(IllegalArgumentException.class);
 	}
+
+	@Test
+	void AP032_AC1_반려문서_재상신_새라운드_진행중() {
+		ApprovalDocument doc = inProgressDoc(); // 상신자 10L, round 1
+		doc.changeStatus(DocumentStatus.REJECTED);
+		when(documentRepository.findWithLockById(1L)).thenReturn(Optional.of(doc));
+
+		ApprovalDocument result = service.resubmit(1L, 10L, List.of(
+			new LineMemberSpec(1, 100L, StepType.SEQUENTIAL)));
+
+		assertThat(result.getStatus()).isEqualTo(DocumentStatus.IN_PROGRESS);
+		assertThat(result.getCurrentRound()).isEqualTo(2); // 라운드 증가
+		verify(lineRepository, times(1)).save(any(ApprovalLineSnapshot.class));
+	}
+
+	@Test
+	void AP032_반려아닌_문서_재상신_거부() {
+		ApprovalDocument doc = inProgressDoc(); // IN_PROGRESS
+		when(documentRepository.findWithLockById(1L)).thenReturn(Optional.of(doc));
+
+		assertThatThrownBy(() -> service.resubmit(1L, 10L,
+			List.of(new LineMemberSpec(1, 100L, StepType.SEQUENTIAL))))
+			.isInstanceOf(IllegalStateException.class);
+	}
+
+	@Test
+	void AP032_상신자아니면_재상신_거부() {
+		ApprovalDocument doc = inProgressDoc();
+		doc.changeStatus(DocumentStatus.REJECTED);
+		when(documentRepository.findWithLockById(1L)).thenReturn(Optional.of(doc));
+
+		assertThatThrownBy(() -> service.resubmit(1L, 999L,
+			List.of(new LineMemberSpec(1, 100L, StepType.SEQUENTIAL))))
+			.isInstanceOf(IllegalArgumentException.class);
+	}
 }
