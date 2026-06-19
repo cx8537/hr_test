@@ -1,0 +1,37 @@
+# HR_Test_05 백엔드 설정
+# 비밀값·환경 의존 값은 환경변수로 외부화한다(NFR-OPS-002). 기본값은 로컬 개발 편의용 placeholder.
+spring:
+  application:
+    name: hr-backend
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/hr}
+    username: ${DB_USER:hr}
+    password: ${DB_PASSWORD:}
+  jpa:
+    hibernate:
+      # 스키마는 Flyway로만 관리. 운영·개발 모두 validate (손으로 스키마 변경 금지)
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: Asia/Seoul   # DB 시각 KST 고정
+  flyway:
+    enabled: true
+  jackson:
+    time-zone: Asia/Seoul         # API 직렬화 시각 KST 고정
+
+# 애플리케이션 고유 설정(전부 환경변수 외부화)
+app:
+  jwt:
+    secret: ${JWT_SECRET:}
+    access-expires-in: ${JWT_ACCESS_EXPIRES_IN:900000}        # 15분(ms)
+    refresh-expires-in: ${JWT_REFRESH_EXPIRES_IN:1209600000}  # 14일(ms)
+  minio:
+    endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
+    access-key: ${MINIO_ACCESS_KEY:}
+    secret-key: ${MINIO_SECRET_KEY:}
+    bucket: ${MINIO_BUCKET:hr}
+  bootstrap-admin:
+    login-id: ${BOOTSTRAP_ADMIN_LOGIN_ID:admin}
+    init-password: ${BOOTSTRAP_ADMIN_INIT_PASSWORD:}
