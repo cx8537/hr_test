@@ -11,4 +11,7 @@ public interface ApprovalLineSnapshotRepository extends JpaRepository<ApprovalLi
 
 	/** 문서의 모든 라운드 스냅샷(관여자 판정용). */
 	List<ApprovalLineSnapshot> findByDocumentId(Long documentId);
+
+	/** 특정 결재자가 포함된 스냅샷(퇴사 시 영향 결재 산출 LIFE-A2). */
+	List<ApprovalLineSnapshot> findByApproverId(Long approverId);
 }
