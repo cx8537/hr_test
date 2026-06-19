@@ -69,6 +69,11 @@ public class Employee extends BaseEntity {
 		this.mustChangePassword = mustChangePassword;
 	}
 
+	/** 로그아웃·퇴사·강제만료 시 토큰 버전을 올려 기존 Access 토큰을 무효화한다(FND-004). */
+	public void incrementTokenVersion() {
+		this.tokenVersion++;
+	}
+
 	public String getEmpNo() {
 		return empNo;
 	}

@@ -71,6 +71,14 @@ public class AuthService {
 		return new LoginResponse(accessToken, refreshToken, employee.isMustChangePassword());
 	}
 
+	/** 로그아웃(FND-004): 토큰 버전 증가로 기존 Access 무효화 + 미폐기 Refresh 토큰 폐기. */
+	@Transactional
+	public void logout(Long employeeId) {
+		employeeRepository.findById(employeeId).ifPresent(Employee::incrementTokenVersion);
+		refreshTokenRepository.findByEmployeeIdAndRevokedFalse(employeeId)
+			.forEach(token -> token.revoke());
+	}
+
 	@Transactional(readOnly = true)
 	public TokenResponse refresh(String refreshToken) {
 		// 서명·만료 검증(실패 시 JwtException). 상세 폐기·해시 대조는 FND-004(1-4)에서 강화.

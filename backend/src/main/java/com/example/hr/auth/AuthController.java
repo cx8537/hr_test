@@ -5,6 +5,8 @@ import com.example.hr.auth.dto.AuthDtos.LoginResponse;
 import com.example.hr.auth.dto.AuthDtos.RefreshRequest;
 import com.example.hr.auth.dto.AuthDtos.TokenResponse;
 import jakarta.validation.Valid;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -29,5 +31,11 @@ public class AuthController {
 	@PostMapping("/refresh")
 	public TokenResponse refresh(@Valid @RequestBody RefreshRequest request) {
 		return authService.refresh(request.refreshToken());
+	}
+
+	@PostMapping("/logout")
+	public ResponseEntity<Void> logout(@AuthenticationPrincipal Long employeeId) {
+		authService.logout(employeeId);
+		return ResponseEntity.noContent().build();
 	}
 }
